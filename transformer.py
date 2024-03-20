@@ -49,3 +49,13 @@ class Transformer(nn.Module):
         
         return out
     
+    def get_tgt_mask(self, size) -> torch.tensor:
+        mask = torch.tril(torch.ones(size, size) == 1)
+        mask = mask.float()
+        mask = mask.masked_fill(mask == 0, float('-inf'))
+        mask = mask.masked_fill(mask == 1, float(0.0))
+        
+        return mask
+    
+    def create_pad_mask(self, matrix: torch.tensor, pad_token: int) -> torch.tensor:
+        return (matrix == pad_token)
