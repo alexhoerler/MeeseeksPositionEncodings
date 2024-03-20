@@ -6,89 +6,46 @@ from positionalEncoder import PositionalEncoder
 class Transformer(nn.Module):
     def __init__(
         self,
-        vocab_size,
+        input_vocab_size,
+        output_vocab_size,
         d_model=512,
         nhead=8,
         num_encoder_layers=6,
         num_decoder_layers=6,
         dim_feedforward=2048,
-        dropout=0.1
+        dropout=0.1,
+        input_position_encoder=PositionalEncoder,
+        output_position_encoder=PositionalEncoder
     ):
         super(Transformer, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, d_model)
-        self.pos_encoder = PositionalEncoder(d_model)
-        encoder_layers = nn.TransformerEncoderLayer(
+        
+        self.input_embedding = nn.Embedding(input_vocab_size, d_model)
+        self.output_embedding = nn.Embedding(output_vocab_size, d_model)
+        self.input_pos_encoder = input_position_encoder(d_model)
+        self.output_pos_encoder = output_position_encoder(d_model)
+        
+        self.transformer = nn.Transformer(
             d_model=d_model,
             nhead=nhead,
+            num_encoder_layers=num_encoder_layers,
+            num_decoder_layers=num_decoder_layers,
             dim_feedforward=dim_feedforward,
             dropout=dropout
         )
-        self.encoder = nn.TransformerEncoder(encoder_layers, num_layers=num_encoder_layers)
-        decoder_layers = nn.TransformerDecoderLayer(
-            d_model=d_model,
-            nhead=nhead,
-            dim_feedforward=dim_feedforward,
-            dropout=dropout
-        )
-        self.decoder = nn.TransformerDecoder(decoder_layers, num_layers=num_decoder_layers)
+        self.linear = nn.Linear(d_model, output_vocab_size)
 
-    def forward(self, src, tgt):
-        src = self.embedding(src)
-        src = self.pos_encoder(src)
-        tgt = self.embedding(tgt)
-        tgt = self.pos_encoder(tgt)
-        memory = self.encoder(src)
-        output = self.decoder(tgt, memory)
-        return output
+    def forward(self, src, tgt, tgt_mask=None, src_pad_mask=None, tgt_pad_mask=None):
+        src = self.input_embedding(src) * math.sqrt(self.d_model)
+        src = self.input_pos_encoder(src)
+
+        tgt = self.output_embedding(tgt)
+        tgt = self.output_pos_encoder(tgt)
+
+        src = src.permute(1,0,2)
+        tgt = tgt.permute(1,0,2)
+
+        transformer_out = self.transformer(src, tgt, tgt_mask=tgt_mask, src_key_padding_mask=src_pad_mask, tgt_key_padding_mask=tgt_pad_mask)
+        out = self.out(transformer_out)
+        
+        return out
     
-
-# import math
-# import os
-# from tempfile import TemporaryDirectory
-# from typing import Tuple
-
-# import torch
-# from torch import nn, Tensor
-# from torch.nn import TransformerEncoder, TransformerEncoderLayer
-# from torch.utils.data import dataset
-
-# class TransformerModel(nn.Module):
-
-#     def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int,
-#                  nlayers: int, dropout: float = 0.5):
-#         super().__init__()
-#         self.model_type = 'Transformer'
-#         self.pos_encoder = PositionalEncoding(d_model, dropout)
-#         encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout)
-#         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-#         self.embedding = nn.Embedding(ntoken, d_model)
-#         self.d_model = d_model
-#         self.linear = nn.Linear(d_model, ntoken)
-
-#         self.init_weights()
-
-#     def init_weights(self) -> None:
-#         initrange = 0.1
-#         self.embedding.weight.data.uniform_(-initrange, initrange)
-#         self.linear.bias.data.zero_()
-#         self.linear.weight.data.uniform_(-initrange, initrange)
-
-#     def forward(self, src: Tensor, src_mask: Tensor = None) -> Tensor:
-#         """
-#         Arguments:
-#             src: Tensor, shape ``[seq_len, batch_size]``
-#             src_mask: Tensor, shape ``[seq_len, seq_len]``
-
-#         Returns:
-#             output Tensor of shape ``[seq_len, batch_size, ntoken]``
-#         """
-#         src = self.embedding(src) * math.sqrt(self.d_model)
-#         src = self.pos_encoder(src)
-#         if src_mask is None:
-#             """Generate a square causal mask for the sequence. The masked positions are filled with float('-inf').
-#             Unmasked positions are filled with float(0.0).
-#             """
-#             src_mask = nn.Transformer.generate_square_subsequent_mask(len(src)).to(device)
-#         output = self.transformer_encoder(src, src_mask)
-#         output = self.linear(output)
-#         return output
