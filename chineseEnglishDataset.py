@@ -9,6 +9,14 @@ chinBertTokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
 # Define Dataset
 class ChineseEnglishDataset(Dataset):
     def __init__(self, englishChinesePickle, switchTransform=False, englishTokenizer=engBertTokenizer, chineseTokenizer=chinBertTokenizer, max_length=25):
+        '''
+        Initialize Dataset
+        Params:
+            englishChinesePickle: {row_number: (source sequence, target sequence)}
+            switchTransform: False for English->Chinese, True for Chinese->English
+            englishTokenizer: English language Tokenizer to use
+            chineseTokenizer: Chinese language Tokenizer to use
+        '''
         eng_chin_dict = dict()
         with open(englishChinesePickle, "rb") as pickle_file:
             eng_chin_dict = pickle.load(pickle_file)
@@ -40,12 +48,14 @@ class ChineseEnglishDataset(Dataset):
         return len(self.targets)
     
     def __getitem__(self, index):
+        # Get source tokens list and fit to max_length size
         seq_tokens = self.seqTokenizer(self.sequences[index])
         if len(seq_tokens) > self.max_length:
             seq_tokens = seq_tokens[: self.max_length - 1] + seq_tokens[-1: ]
         else:
             seq_tokens = seq_tokens + [0] * (self.max_length - len(seq_tokens))
         
+        # Get target tokens list and fit to max_length size
         target_tokens = self.targetTokenizer(self.targets[index])
         if len(target_tokens) > self.max_length:
             target_tokens = target_tokens[: self.max_length - 1] + target_tokens[-1: ]
