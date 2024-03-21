@@ -17,7 +17,7 @@ def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuf
     eval_data_loader = DataLoader(eval_subset, batch_size=batch_size)
     return train_data_loader, eval_data_loader
 
-def trainModel(model, optimizer, criterion, data_loader, iteration_num):
+def trainModel(model, optimizer, criterion, data_loader, iteration_num, device):
     model.train()
     total_loss = 0
     
@@ -65,6 +65,18 @@ def trainModel(model, optimizer, criterion, data_loader, iteration_num):
     print(f"--- Iteration {iteration_num} - Average Loss: {average_loss} ---")
     return model
 
+def evaluateModel(model, data_loader):
+    model.eval()
+    total_bleu = 0
+    total_seqs = 0
+    
+    with torch.no_grad():
+        for batch in data_loader:
+            input_seq, target_seq = batch[0].to(device), batch[1].to(device)
+            X, y = input_seq, target_seq
+    
+    return total_bleu / total_seqs
+
 if __name__ == "__main__":
     train_data_loader, eval_data_loader = createDataloaders()
     eng_vocab_size = engBertTokenizer.vocab_size
@@ -77,5 +89,5 @@ if __name__ == "__main__":
     epochs = 10
 
     for epoch_num in range(epochs):
-        model = trainModel(model, optimizer, criterion, train_data_loader)
+        model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device)
         torch.save(model.state_dict(), "transformer.pth")
