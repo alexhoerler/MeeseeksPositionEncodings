@@ -48,23 +48,27 @@ class ChineseEnglishDataset(Dataset):
                 if len(mappings[0]) < 55 and len(mappings[1]) < 25:
                     self.sequences.append(mappings[1])
                     self.targets.append(mappings[0])
+        
+        self.seq_tensors = []
+        for sentence in self.sequences:
+            seq_tokens = self.seqTokenizer.encode(sentence)
+            if len(seq_tokens) > self.seq_max_length:
+                seq_tokens = seq_tokens[: self.seq_max_length - 1] + seq_tokens[-1: ]
+            else:
+                seq_tokens = seq_tokens + [0] * (self.seq_max_length - len(seq_tokens))
+            self.seq_tensors.append(torch.tensor(seq_tokens))
+        
+        self.target_tensors = []
+        for sentence in self.targets:
+            target_tokens = self.targetTokenizer.encode(sentence)
+            if len(target_tokens) > self.target_max_length:
+                target_tokens = target_tokens[: self.target_max_length - 1] + target_tokens[-1: ]
+            else:
+                target_tokens = target_tokens + [0] * (self.target_max_length - len(target_tokens))
+            self.target_tensors.append(torch.tensor(target_tokens))
     
     def __len__(self):
         return len(self.targets)
     
     def __getitem__(self, index):
-        # Get source tokens list and fit to max_length size
-        seq_tokens = self.seqTokenizer(self.sequences[index])
-        if len(seq_tokens) > self.seq_max_length:
-            seq_tokens = seq_tokens[: self.seq_max_length - 1] + seq_tokens[-1: ]
-        else:
-            seq_tokens = seq_tokens + [0] * (self.seq_max_length - len(seq_tokens))
-        
-        # Get target tokens list and fit to max_length size
-        target_tokens = self.targetTokenizer(self.targets[index])
-        if len(target_tokens) > self.target_max_length:
-            target_tokens = target_tokens[: self.target_max_length - 1] + target_tokens[-1: ]
-        else:
-            target_tokens = target_tokens + [0] * (self.target_max_length - len(target_tokens))
-        
-        return torch.tensor(seq_tokens), torch.tensor(target_tokens)
+        return self.seq_tensors[index], self.target_tensors[index]

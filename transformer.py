@@ -18,6 +18,7 @@ class Transformer(nn.Module):
         output_position_encoder=PositionalEncoder
     ):
         super(Transformer, self).__init__()
+        self.d_model = d_model
         
         self.input_embedding = nn.Embedding(input_vocab_size, d_model)
         self.output_embedding = nn.Embedding(output_vocab_size, d_model)
@@ -30,9 +31,10 @@ class Transformer(nn.Module):
             num_encoder_layers=num_encoder_layers,
             num_decoder_layers=num_decoder_layers,
             dim_feedforward=dim_feedforward,
-            dropout=dropout
+            dropout=dropout,
+            batch_first=True
         )
-        self.linear = nn.Linear(d_model, output_vocab_size)
+        self.out_linear = nn.Linear(d_model, output_vocab_size)
 
     def forward(self, src, tgt, tgt_mask=None, src_pad_mask=None, tgt_pad_mask=None):
         src = self.input_embedding(src) * math.sqrt(self.d_model)
@@ -41,11 +43,8 @@ class Transformer(nn.Module):
         tgt = self.output_embedding(tgt)
         tgt = self.output_pos_encoder(tgt)
 
-        src = src.permute(1,0,2)
-        tgt = tgt.permute(1,0,2)
-
         transformer_out = self.transformer(src, tgt, tgt_mask=tgt_mask, src_key_padding_mask=src_pad_mask, tgt_key_padding_mask=tgt_pad_mask)
-        out = self.out(transformer_out)
+        out = self.out_linear(transformer_out)
         
         return out
     

@@ -9,6 +9,7 @@ def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuf
         lang_dataset = ChineseEnglishDataset("seq_data.pkl")
     else:
         lang_dataset = ChineseEnglishDataset("seq_data.pkl", switchTransform=True)
+    print(f"Dataset has {lang_dataset.__len__()} pairs.")
     
     train_size = int(train_percentage * len(lang_dataset))
     eval_size = len(lang_dataset) - train_size
@@ -18,11 +19,11 @@ def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuf
     eval_data_loader = DataLoader(eval_subset, batch_size=batch_size)
     return train_data_loader, eval_data_loader
 
-def trainModel(model, optimizer, criterion, data_loader, iteration_num, device):
+def trainModel(model, optimizer, criterion, data_loader, epoch_num, device):
     model.train()
     total_loss = 0
     
-    print(f"--- Iteration {iteration_num} ---")
+    print(f"--- Epoch {epoch_num} ---")
     for batch_num, batch in enumerate(data_loader):
         input_seq, target_seq = batch[0].to(device), batch[1].to(device)
         X, y = input_seq, target_seq
@@ -49,8 +50,7 @@ def trainModel(model, optimizer, criterion, data_loader, iteration_num, device):
 
             pred = model(X, y_input, tgt_mask, src_pad_mask)
             
-            pred = pred.permute(1, 2, 0)
-            pred = pred[:, :, -1] # only take the last predicted value
+            pred = pred[:, -1, :] # only take the last predicted value
             loss = criterion(pred, y_expected)
 
             optimizer.zero_grad()
@@ -60,11 +60,11 @@ def trainModel(model, optimizer, criterion, data_loader, iteration_num, device):
             loss_item = loss.detach().item()
             total_loss += loss_item
 
-        if batch_num % 100000 == 0:
+        if batch_num % 1000 == 0:
             print(f"Batch {batch_num}, Loss: {loss_item}")
     
     average_loss = total_loss / len(data_loader)
-    print(f"--- Iteration {iteration_num} - Average Loss: {average_loss} ---")
+    print(f"--- Epoch {epoch_num} - Average Loss: {average_loss} ---")
     return model
 
 def evaluateModel(model, data_loader, device):
@@ -94,8 +94,7 @@ def evaluateModel(model, data_loader, device):
                 tgt_mask = model.get_tgt_mask(y_input_length).to(device)
 
                 pred = model(X, y_input, tgt_mask, src_pad_mask)
-                pred = pred.permute(1, 2, 0)
-                pred = pred[:, :, -1] # only take the last predicted value
+                pred = pred[:, -1, :] # only take the last predicted value
                 tokens = torch.argmax(pred, dim=-1)
                 y_input = torch.cat((y_input, tokens), dim=-1)
             
