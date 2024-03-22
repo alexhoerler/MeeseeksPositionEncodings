@@ -7,18 +7,24 @@ import nltk.translate.bleu_score as bleu
 
 def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuffle=True):
     if eng_source:
-        if os.path.exists("engChinDataset.pth"):
-            lang_dataset = torch.load("engChinDataset.pth")
+        dataset_file = "engChinDataset.pth"
+        if os.path.exists(dataset_file):
+            print(f"Loading dataset from {dataset_file} file")
+            lang_dataset = torch.load(dataset_file)
         else:
+            print(f"Creating dataset from pickle file")
             lang_dataset = ChineseEnglishDataset("seq_data.pkl")
-            torch.save(lang_dataset, "engChinDataset.pth")
+            torch.save(lang_dataset, dataset_file)
     else:
-        if os.path.exists("chinEngDataset.pth"):
-            lang_dataset = torch.load("chinEngDataset.pth")
+        dataset_file = "chinEngDataset.pth"
+        if os.path.exists(dataset_file):
+            print(f"Loading dataset from {dataset_file} file")
+            lang_dataset = torch.load(dataset_file)
         else:
+            print(f"Creating dataset from pickle file")
             lang_dataset = ChineseEnglishDataset("seq_data.pkl", switchTransform=True)
-            torch.save(lang_dataset, "chinEngDataset.pth")
-    print(f"Dataset has {lang_dataset.__len__()} pairs.")
+            torch.save(lang_dataset, dataset_file)
+    print(f"Dataset loaded; has {lang_dataset.__len__()} pairs.")
 
     train_size = int(train_percentage * len(lang_dataset))
     eval_size = len(lang_dataset) - train_size
@@ -69,8 +75,10 @@ def trainModel(model, optimizer, criterion, data_loader, epoch_num, device):
             loss_item = loss.detach().item()
             total_loss += loss_item
 
-        if batch_num % 1000 == 0:
+        if batch_num % 10 == 0:
             print(f"Batch {batch_num}, Loss: {loss_item}")
+        if batch_num == 50:
+            break
     
     average_loss = total_loss / len(data_loader)
     print(f"--- Epoch {epoch_num} - Average Loss: {average_loss} ---")
@@ -131,6 +139,7 @@ if __name__ == "__main__":
     criterion = torch.nn.CrossEntropyLoss()
     epochs = 20
 
+    print("\nStarting Training/Testing")
     for epoch_num in range(epochs):
         model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device)
         average_bleu = evaluateModel(model, eval_data_loader)
