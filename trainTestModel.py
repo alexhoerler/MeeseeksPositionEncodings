@@ -1,3 +1,4 @@
+import os
 import torch
 from torch.utils.data import DataLoader
 from chineseEnglishDataset import *
@@ -6,11 +7,19 @@ import nltk.translate.bleu_score as bleu
 
 def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuffle=True):
     if eng_source:
-        lang_dataset = ChineseEnglishDataset("seq_data.pkl")
+        if os.path.exists("engChinDataset.pth"):
+            lang_dataset = torch.load("engChinDataset.pth")
+        else:
+            lang_dataset = ChineseEnglishDataset("seq_data.pkl")
+            torch.save(lang_dataset, "engChinDataset.pth")
     else:
-        lang_dataset = ChineseEnglishDataset("seq_data.pkl", switchTransform=True)
+        if os.path.exists("chinEngDataset.pth"):
+            lang_dataset = torch.load("chinEngDataset.pth")
+        else:
+            lang_dataset = ChineseEnglishDataset("seq_data.pkl", switchTransform=True)
+            torch.save(lang_dataset, "chinEngDataset.pth")
     print(f"Dataset has {lang_dataset.__len__()} pairs.")
-    
+
     train_size = int(train_percentage * len(lang_dataset))
     eval_size = len(lang_dataset) - train_size
     train_subset, eval_subset = torch.utils.data.random_split(lang_dataset, [train_size, eval_size])
@@ -115,10 +124,12 @@ if __name__ == "__main__":
     chin_vocab_size = chinBertTokenizer.vocab_size
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Current device: {device}")
+    
     model = Transformer(input_vocab_size=eng_vocab_size, output_vocab_size=chin_vocab_size).to(device)
     optimizer = torch.optim.Adam(model.parameters())
     criterion = torch.nn.CrossEntropyLoss()
-    epochs = 10
+    epochs = 20
 
     for epoch_num in range(epochs):
         model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device)
