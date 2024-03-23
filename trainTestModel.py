@@ -1,29 +1,37 @@
 import os
+import argparse
 import torch
 from torch.utils.data import DataLoader
 from chineseEnglishDataset import *
-from transformer import Transformer
+from transformerModel import TransformerModel
 import nltk.translate.bleu_score as bleu
 
-def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuffle=True):
+def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuffle=True, on_pace=False):
+    if on_pace:
+        location_prefix = "/storage/home/hcoda1/9/ahoerler3/scratch/p-ahoerler3-1/MeeseeksPositionEncodings/"
+    else:
+        location_prefix = ""
+
     if eng_source:
         dataset_file = "engChinDataset.pth"
-        if os.path.exists(dataset_file):
+        dataset_path = f"{location_prefix}{dataset_file}"
+        if os.path.exists(dataset_path):
             print(f"Loading dataset from {dataset_file} file")
-            lang_dataset = torch.load(dataset_file)
+            lang_dataset = torch.load(dataset_path)
         else:
             print(f"Creating dataset from pickle file")
             lang_dataset = ChineseEnglishDataset("seq_data.pkl")
-            torch.save(lang_dataset, dataset_file)
+            torch.save(lang_dataset, dataset_path)
     else:
         dataset_file = "chinEngDataset.pth"
-        if os.path.exists(dataset_file):
+        dataset_path = f"{location_prefix}{dataset_file}"
+        if os.path.exists(dataset_path):
             print(f"Loading dataset from {dataset_file} file")
             lang_dataset = torch.load(dataset_file)
         else:
             print(f"Creating dataset from pickle file")
             lang_dataset = ChineseEnglishDataset("seq_data.pkl", switchTransform=True)
-            torch.save(lang_dataset, dataset_file)
+            torch.save(lang_dataset, dataset_path)
     print(f"Dataset loaded; has {lang_dataset.__len__()} pairs.")
 
     train_size = int(train_percentage * len(lang_dataset))
@@ -75,10 +83,8 @@ def trainModel(model, optimizer, criterion, data_loader, epoch_num, device):
             loss_item = loss.detach().item()
             total_loss += loss_item
 
-        if batch_num % 10 == 0:
+        if batch_num % 10000 == 0:
             print(f"Batch {batch_num}, Loss: {loss_item}")
-        if batch_num == 50:
-            break
     
     average_loss = total_loss / len(data_loader)
     print(f"--- Epoch {epoch_num} - Average Loss: {average_loss} ---")
@@ -90,7 +96,7 @@ def evaluateModel(model, data_loader, device):
     
     outputs = []
     with torch.no_grad():
-        for batch in data_loader:
+        for batch_number, batch in enumerate(data_loader):
             input_seq, target_seq = batch[0].to(device), batch[1].to(device)
             X, y = input_seq, target_seq
 
@@ -112,7 +118,7 @@ def evaluateModel(model, data_loader, device):
 
                 pred = model(X, y_input, tgt_mask, src_pad_mask)
                 pred = pred[:, -1, :] # only take the last predicted value
-                tokens = torch.argmax(pred, dim=-1)
+                tokens = torch.argmax(pred, dim=-1, keepdim=True)
                 y_input = torch.cat((y_input, tokens), dim=-1)
             
             for row_idx in range(y_input.shape[0]):
@@ -127,14 +133,34 @@ def evaluateModel(model, data_loader, device):
     return total_bleu / len(outputs)
 
 if __name__ == "__main__":
-    train_data_loader, eval_data_loader = createDataloaders()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--on_pace", help="Whether it's running on a Pace cluster", action="store_true")
+    parser.add_argument("-e", "--eng_src", help="Whether it's english source", action="store_true")
+    parser.add_argument("-m", "--model_name", type=str, nargs='?', help="The model name")
+    args = parser.parse_args()
+    if args.on_pace:
+        location_prefix = "/storage/home/hcoda1/9/ahoerler3/scratch/p-ahoerler3-1/MeeseeksPositionEncodings/"
+        print("Intended for Pace")
+    else:
+        location_prefix = ""
+
     eng_vocab_size = engBertTokenizer.vocab_size
     chin_vocab_size = chinBertTokenizer.vocab_size
+    if args.eng_src:
+        print("English as source, Chinese as target")
+        in_vocab_size = eng_vocab_size
+        out_vocab_size = chin_vocab_size
+    else:
+        print("Chinese as source, English as target")
+        in_vocab_size = chin_vocab_size
+        out_vocab_size = eng_vocab_size
+
+    train_data_loader, eval_data_loader = createDataloaders(eng_source=args.eng_src, on_pace=args.on_pace)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Current device: {device}")
     
-    model = Transformer(input_vocab_size=eng_vocab_size, output_vocab_size=chin_vocab_size).to(device)
+    model = TransformerModel(input_vocab_size=in_vocab_size, output_vocab_size=out_vocab_size).to(device)
     optimizer = torch.optim.Adam(model.parameters())
     criterion = torch.nn.CrossEntropyLoss()
     epochs = 20
@@ -142,6 +168,6 @@ if __name__ == "__main__":
     print("\nStarting Training/Testing")
     for epoch_num in range(epochs):
         model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device)
-        average_bleu = evaluateModel(model, eval_data_loader)
+        average_bleu = evaluateModel(model, eval_data_loader, device)
         print(f"Epoch {epoch_num} - Average Bleu: {average_bleu}")
-        torch.save(model.state_dict(), "transformer.pth")
+        torch.save(model.state_dict(), f"{location_prefix}{args.model_name}.pth")

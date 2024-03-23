@@ -3,21 +3,21 @@ import torch.nn as nn
 import math
 from positionalEncoder import PositionalEncoder
 
-class Transformer(nn.Module):
+class TransformerModel(nn.Module):
     def __init__(
         self,
         input_vocab_size,
         output_vocab_size,
         d_model=512,
         nhead=8,
-        num_encoder_layers=4,
-        num_decoder_layers=4,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
         dim_feedforward=2048,
         dropout=0.1,
         input_position_encoder=PositionalEncoder,
         output_position_encoder=PositionalEncoder
     ):
-        super(Transformer, self).__init__()
+        super(TransformerModel, self).__init__()
         self.d_model = d_model
         
         self.input_embedding = nn.Embedding(input_vocab_size, d_model)
