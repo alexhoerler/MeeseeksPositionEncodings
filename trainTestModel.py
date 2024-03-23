@@ -6,7 +6,7 @@ from chineseEnglishDataset import *
 from transformerModel import TransformerModel
 import nltk.translate.bleu_score as bleu
 
-def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuffle=True, on_pace=False):
+def createDataloaders(train_percentage=0.95, eng_source=True, batch_size=32, shuffle=True, on_pace=False):
     if on_pace:
         location_prefix = "/storage/home/hcoda1/9/ahoerler3/scratch/p-ahoerler3-1/MeeseeksPositionEncodings/"
     else:
@@ -42,7 +42,7 @@ def createDataloaders(train_percentage=0.9, eng_source=True, batch_size=32, shuf
     eval_data_loader = DataLoader(eval_subset, batch_size=batch_size)
     return train_data_loader, eval_data_loader
 
-def trainModel(model, optimizer, criterion, data_loader, epoch_num, device):
+def trainModel(model, optimizer, criterion, data_loader, epoch_num, device, model_path):
     model.train()
     total_loss = 0
     
@@ -85,6 +85,7 @@ def trainModel(model, optimizer, criterion, data_loader, epoch_num, device):
 
         if batch_num % 10000 == 0:
             print(f"Batch {batch_num}, Loss: {loss_item}")
+            torch.save(model.state_dict(), model_path)
     
     average_loss = total_loss / len(data_loader)
     print(f"--- Epoch {epoch_num} - Average Loss: {average_loss} ---")
@@ -123,6 +124,13 @@ def evaluateModel(model, data_loader, device):
             
             for row_idx in range(y_input.shape[0]):
                 outputs.append(([y[row_idx].tolist()], y_input[row_idx].tolist()))
+            
+            if batch_number % 1000 == 0:
+                try:
+                    bleu_score = bleu.sentence_bleu(outputs[-1][0], outputs[-1][1], weights=(0.33, 0.33, 0.33, 0))
+                except:
+                    bleu_score = 0
+                print(f"Batch {batch_number} - Bleu: {bleu_score}")
     
     for true_label_list, generated in outputs:
         try:
@@ -155,19 +163,23 @@ if __name__ == "__main__":
         in_vocab_size = chin_vocab_size
         out_vocab_size = eng_vocab_size
 
+    model_path = f"{location_prefix}{args.model_name}.pth"
     train_data_loader, eval_data_loader = createDataloaders(eng_source=args.eng_src, on_pace=args.on_pace)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Current device: {device}")
     
     model = TransformerModel(input_vocab_size=in_vocab_size, output_vocab_size=out_vocab_size).to(device)
+    if os.path.exists(model_path):
+        print("Loading model from file")
+        model.load_state_dict(torch.load(model_path))
     optimizer = torch.optim.Adam(model.parameters())
     criterion = torch.nn.CrossEntropyLoss()
     epochs = 20
 
     print("\nStarting Training/Testing")
     for epoch_num in range(epochs):
-        model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device)
+        model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device, model_path)
+        torch.save(model.state_dict(), model_path)
         average_bleu = evaluateModel(model, eval_data_loader, device)
         print(f"Epoch {epoch_num} - Average Bleu: {average_bleu}")
-        torch.save(model.state_dict(), f"{location_prefix}{args.model_name}.pth")
