@@ -39,15 +39,19 @@ class ChineseEnglishDataset(Dataset):
         if not self.switchSeqTarget:
             for key_number in eng_chin_dict:
                 mappings = eng_chin_dict[key_number]
-                if len(mappings[0]) < 55 and len(mappings[1]) < 25:
+                if len(mappings[0]) < 35 and len(mappings[1]) < 15:
                     self.sequences.append(mappings[0])
                     self.targets.append(mappings[1])
+                if len(self.targets) >= 40000 * 32:
+                    break
         else:
             for key_number in eng_chin_dict:
                 mappings = eng_chin_dict
-                if len(mappings[0]) < 55 and len(mappings[1]) < 25:
+                if len(mappings[0]) < 35 and len(mappings[1]) < 15:
                     self.sequences.append(mappings[1])
                     self.targets.append(mappings[0])
+                if len(self.targets) >= 40000 * 32:
+                    break
         
         self.seq_tensors = []
         for sentence in self.sequences:

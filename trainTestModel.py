@@ -1,3 +1,6 @@
+'''
+standard - epochs: 1
+'''
 import os
 import argparse
 import torch
@@ -6,7 +9,7 @@ from chineseEnglishDataset import *
 from transformerModel import TransformerModel
 import nltk.translate.bleu_score as bleu
 
-def createDataloaders(train_percentage=0.95, eng_source=True, batch_size=32, shuffle=True, on_pace=False):
+def createDataloaders(train_percentage=0.95, eng_source=True, batch_size=32, shuffle=False, on_pace=False):
     if on_pace:
         location_prefix = "/storage/home/hcoda1/9/ahoerler3/scratch/p-ahoerler3-1/MeeseeksPositionEncodings/"
     else:
@@ -42,12 +45,15 @@ def createDataloaders(train_percentage=0.95, eng_source=True, batch_size=32, shu
     eval_data_loader = DataLoader(eval_subset, batch_size=batch_size)
     return train_data_loader, eval_data_loader
 
-def trainModel(model, optimizer, criterion, data_loader, epoch_num, device, model_path):
+def trainModel(model, optimizer, criterion, data_loader, epoch_num, device, start_batch, model_path):
     model.train()
     total_loss = 0
     
     print(f"--- Epoch {epoch_num} ---")
     for batch_num, batch in enumerate(data_loader):
+        if epoch_num == 0 and batch_num < start_batch:
+            continue
+
         input_seq, target_seq = batch[0].to(device), batch[1].to(device)
         X, y = input_seq, target_seq
 
@@ -103,6 +109,12 @@ def evaluateModel(model, data_loader, device):
 
             y_input = y[:, :1]
             for output_idx in range(1, y.shape[1]):
+                # skip if all values to be predicted are padded values
+                if torch.all(y_input[:, -1] == 102):
+                    print("breaking")
+                    break
+
+                # filter all sequences already filtered (generated EOS)
                 unfinished_filter = y_input[:, -1] != 102 # 102 is [EOS] token number for BERT tokenizers
                 finished_filter = ~unfinished_filter
                 y_finished = y_input[finished_filter]
@@ -124,13 +136,6 @@ def evaluateModel(model, data_loader, device):
             
             for row_idx in range(y_input.shape[0]):
                 outputs.append(([y[row_idx].tolist()], y_input[row_idx].tolist()))
-            
-            if batch_number % 1000 == 0:
-                try:
-                    bleu_score = bleu.sentence_bleu(outputs[-1][0], outputs[-1][1], weights=(0.33, 0.33, 0.33, 0))
-                except:
-                    bleu_score = 0
-                print(f"Batch {batch_number} - Bleu: {bleu_score}")
     
     for true_label_list, generated in outputs:
         try:
@@ -145,6 +150,7 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--on_pace", help="Whether it's running on a Pace cluster", action="store_true")
     parser.add_argument("-e", "--eng_src", help="Whether it's english source", action="store_true")
     parser.add_argument("-m", "--model_name", type=str, nargs='?', help="The model name")
+    parser.add_argument("-s", "--start_batch", type=int, help="The batch to start with")
     args = parser.parse_args()
     if args.on_pace:
         location_prefix = "/storage/home/hcoda1/9/ahoerler3/scratch/p-ahoerler3-1/MeeseeksPositionEncodings/"
@@ -162,6 +168,11 @@ if __name__ == "__main__":
         print("Chinese as source, English as target")
         in_vocab_size = chin_vocab_size
         out_vocab_size = eng_vocab_size
+    
+    if args.start_batch:
+        start_batch = args.start_batch
+    else:
+        start_batch = 0
 
     model_path = f"{location_prefix}{args.model_name}.pth"
     train_data_loader, eval_data_loader = createDataloaders(eng_source=args.eng_src, on_pace=args.on_pace)
@@ -179,7 +190,7 @@ if __name__ == "__main__":
 
     print("\nStarting Training/Testing")
     for epoch_num in range(epochs):
-        model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device, model_path)
+        model = trainModel(model, optimizer, criterion, train_data_loader, epoch_num, device, start_batch, model_path)
         torch.save(model.state_dict(), model_path)
         average_bleu = evaluateModel(model, eval_data_loader, device)
         print(f"Epoch {epoch_num} - Average Bleu: {average_bleu}")
