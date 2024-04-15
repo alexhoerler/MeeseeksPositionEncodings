@@ -7,6 +7,9 @@ import torch
 from torch.utils.data import DataLoader
 from chineseEnglishDataset import *
 from transformerModel import TransformerModel
+from positionalEncoder import PositionalEncoder
+from relativePositionalEncoder import RelativePositionalEncoder
+from incrementalPositionalEncoder import IncrementalPositionalEncoder
 import nltk.translate.bleu_score as bleu
 
 seqTokenizer = None
@@ -179,6 +182,14 @@ if __name__ == "__main__":
     else:
         location_prefix = ""
     
+    encoder_type = None
+    if args.model_name == "standard":
+        encoder_type = PositionalEncoder
+    elif args.model_name == "relative":
+        encoder_type = RelativePositionalEncoder
+    elif args.model_name == "incremental":
+        encoder_type = IncrementalPositionalEncoder
+    
     print("English as source, Chinese as target")
 
     model_path = f"{location_prefix}{args.model_name}.pth"
@@ -189,7 +200,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Current device: {device}")
     
-    model = TransformerModel(input_vocab_size=in_vocab_size, output_vocab_size=out_vocab_size).to(device)
+    model = TransformerModel(input_vocab_size=in_vocab_size, output_vocab_size=out_vocab_size, input_position_encoder=encoder_type, output_position_encoder=encoder_type).to(device)
     if os.path.exists(model_path):
         print("Loading model from file")
         model.load_state_dict(torch.load(model_path))

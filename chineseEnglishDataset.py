@@ -1,10 +1,10 @@
 import pickle
 import torch
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
+# from transformers import BertTokenizer
 
-engBertTokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-chinBertTokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
+# engBertTokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+# chinBertTokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
 
 class seqTokenizer():
     def __init__(self):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 class IncrementalPositionalEncoder(nn.Module):
-    def __init__(self, d_model, max_seq_length=21):
+    def __init__(self, d_model, max_seq_length=11):
         super(IncrementalPositionalEncoder, self).__init__()
 
         #max pe = 1
