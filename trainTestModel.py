@@ -1,5 +1,7 @@
 '''
-standard - epochs: 2
+standard - pre-train: 40, epochs: 45
+relative - pre-train: 40, epochs: 42
+incremental - pre-train: 40, epochs: 45
 '''
 import os
 import argparse
@@ -53,7 +55,6 @@ def trainModel(model, criterion, optimizer, data_loader, epoch_num, device):
     initial_state_dict = model.state_dict()
     
     print(f"--- Epoch {epoch_num} Train ---")
-    data_loader = iter(data_loader) # TEST
     for batch_num, batch in enumerate(data_loader):
 
         input_seq, target_seq = batch[0].to(device), batch[1].to(device)
@@ -100,12 +101,8 @@ def trainModel(model, criterion, optimizer, data_loader, epoch_num, device):
 
             if batch_num % 1000 == 0 and output_idx == 1:
                 print(f"Batch {batch_num}, Loss: {loss_item}")
-
-        
-        if batch_num == 1: # TEST
-            break
     
-    average_loss = total_loss / 2 # len(data_loader) TEST
+    average_loss = total_loss / len(data_loader)
     print(f"--- Epoch {epoch_num} - Average Loss: {average_loss} ---")
     
     # current_state_dict = model.state_dict()
@@ -121,7 +118,6 @@ def evaluateModel(model, data_loader, device):
     outputs = []
 
     print(f"--- Epoch {epoch_num} Eval ---")
-    data_loader = iter(data_loader) # TEST
     with torch.no_grad():
         for batch_number, batch in enumerate(data_loader):
             input_seq, target_seq = batch[0].to(device), batch[1].to(device)
@@ -132,7 +128,6 @@ def evaluateModel(model, data_loader, device):
                 # skip if all values to be predicted are padded values
                 if torch.all(y_input[:, -1] == 3):
                     for row_idx in range(y_input.shape[0]):
-                        print("y_input Sequence: ", targetTokenizer.idx_to_seq(y_input[row_idx].tolist(), includeInvis=True, splitSpace=False))
                         outputs.append(([y[row_idx].tolist()], y_input[row_idx].tolist()))
                     break
 
@@ -141,7 +136,6 @@ def evaluateModel(model, data_loader, device):
                 finished_filter = ~unfinished_filter
                 y_finished = y_input[finished_filter]
                 for row_idx in range(y_finished.shape[0]):
-                    print("y_finished Sequence: ", targetTokenizer.idx_to_seq(y_finished[row_idx].tolist(), includeInvis=True, splitSpace=False))
                     outputs.append(([y[row_idx].tolist()], y_finished[row_idx].tolist()))
                 
                 y = y[unfinished_filter]
@@ -159,11 +153,11 @@ def evaluateModel(model, data_loader, device):
             
             for row_idx in range(y_input.shape[0]):
                 outputs.append(([y[row_idx].tolist()], y_input[row_idx].tolist()))
-            
-            if batch_number == 1: # TEST
-                break
     
-    for true_label_list, generated in outputs:
+    for output_idx, (true_label_list, generated) in enumerate(outputs):
+        if output_idx == 0:
+            print("Expected: ", targetTokenizer.idx_to_seq(true_label_list[0], includeInvis=True, splitSpace=False))
+            print("Example Generated: ", targetTokenizer.idx_to_seq(generated, includeInvis=True, splitSpace=False))
         try:
             total_bleu += bleu.sentence_bleu(true_label_list, generated, weights=(0.25, 0.5, 0.25, 0))
         except:
@@ -190,6 +184,8 @@ if __name__ == "__main__":
     elif args.model_name == "incremental":
         encoder_type = IncrementalPositionalEncoder
     
+    assert encoder_type is not None
+    
     print("English as source, Chinese as target")
 
     model_path = f"{location_prefix}{args.model_name}.pth"
@@ -200,6 +196,7 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Current device: {device}")
     
+    print("Encoder Type: ", encoder_type)
     model = TransformerModel(input_vocab_size=in_vocab_size, output_vocab_size=out_vocab_size, input_position_encoder=encoder_type, output_position_encoder=encoder_type).to(device)
     if os.path.exists(model_path):
         print("Loading model from file")
@@ -221,5 +218,5 @@ if __name__ == "__main__":
             if next_lr is not None:
                 optimizer = torch.optim.Adam(model.parameters(), lr=next_lr)
                 prev_loss = loss
-        average_bleu = evaluateModel(model, train_data_loader, device)
+        average_bleu = evaluateModel(model, eval_data_loader, device)
         print(f"Epoch {epoch_num} - Average Bleu: {average_bleu}")
